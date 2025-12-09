@@ -1,36 +1,24 @@
-// setupDatabase.js
+// setupDatabase.js — Supabase-safe version (NO CREATE DATABASE)
 import pkg from "pg";
 import dotenv from "dotenv";
 
 dotenv.config();
 const { Client } = pkg;
-const DB_NAME = "ecommerce_search";
 
 export async function setupDatabase() {
-  console.log("🛠 Setting up modular database...");
+  console.log("🛠 Setting up modular database (Supabase-safe mode)...");
 
-  // admin client to create DB if missing
-  const adminClient = new Client({
-    connectionString: process.env.PG_ADMIN_CONNECTION_STRING,
+  // Directly connect to existing Supabase database: postgres
+  const db = new Client({
+    connectionString: process.env.PG_CONNECTION_STRING,
   });
-  await adminClient.connect();
 
-  const checkDB = `SELECT 1 FROM pg_database WHERE datname='${DB_NAME}';`;
-  const res = await adminClient.query(checkDB);
-  if (res.rowCount === 0) {
-    console.log(`📌 Creating DB ${DB_NAME}`);
-    await adminClient.query(`CREATE DATABASE ${DB_NAME};`);
-  } else {
-    console.log(`✔ Database ${DB_NAME} exists`);
-  }
-  await adminClient.end();
+  await db.connect();
+  console.log("✔ Connected to existing Supabase database: postgres");
 
-  // connect to target DB
-  const dbClient = new Client({ connectionString: process.env.PG_CONNECTION_STRING });
-  await dbClient.connect();
+  // ------ TABLES ------
 
-  // customers
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS customers (
       customer_id SERIAL PRIMARY KEY,
       customer_name TEXT,
@@ -38,30 +26,28 @@ export async function setupDatabase() {
     );
   `);
 
-  // lookup tables
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS brands (
       brand_id SERIAL PRIMARY KEY,
       brand_name TEXT UNIQUE
     );
   `);
 
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS categories (
       category_id SERIAL PRIMARY KEY,
       category_name TEXT UNIQUE
     );
   `);
 
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS collections (
       collection_id SERIAL PRIMARY KEY,
       collection_name TEXT UNIQUE
     );
   `);
 
-  // main searches table
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS searches (
       search_id TEXT PRIMARY KEY,
       customer_id INT REFERENCES customers(customer_id),
@@ -75,8 +61,7 @@ export async function setupDatabase() {
     );
   `);
 
-  // mapping tables
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS search_brands (
       id SERIAL PRIMARY KEY,
       search_id TEXT REFERENCES searches(search_id) ON DELETE CASCADE,
@@ -84,7 +69,7 @@ export async function setupDatabase() {
     );
   `);
 
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS search_categories (
       id SERIAL PRIMARY KEY,
       search_id TEXT REFERENCES searches(search_id) ON DELETE CASCADE,
@@ -92,7 +77,7 @@ export async function setupDatabase() {
     );
   `);
 
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS search_collections (
       id SERIAL PRIMARY KEY,
       search_id TEXT REFERENCES searches(search_id) ON DELETE CASCADE,
@@ -100,8 +85,7 @@ export async function setupDatabase() {
     );
   `);
 
-  // ip addresses and metrics
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS ip_addresses (
       ip_id SERIAL PRIMARY KEY,
       search_id TEXT REFERENCES searches(search_id) ON DELETE CASCADE,
@@ -109,7 +93,7 @@ export async function setupDatabase() {
     );
   `);
 
-  await dbClient.query(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS search_metrics (
       metrics_id SERIAL PRIMARY KEY,
       search_id TEXT REFERENCES searches(search_id) ON DELETE CASCADE,
@@ -120,23 +104,14 @@ export async function setupDatabase() {
     );
   `);
 
-  // indexes
-  await dbClient.query(`
+  // Recommended indexing
+  await db.query(`
     CREATE INDEX IF NOT EXISTS idx_search_date ON searches(search_date);
     CREATE INDEX IF NOT EXISTS idx_keyword ON searches(search_keyword);
     CREATE INDEX IF NOT EXISTS idx_brand_name ON brands(brand_name);
     CREATE INDEX IF NOT EXISTS idx_category_name ON categories(category_name);
-    CREATE INDEX IF NOT EXISTS idx_collection_name ON collections(collection_name);
-    CREATE INDEX IF NOT EXISTS idx_ip_address ON ip_addresses(ip_address);
   `);
 
-  console.log("✔ Schema created/updated");
-  try {
-    await dbClient.query("VACUUM ANALYZE;");
-  } catch (e) {
-    // skip if not permitted
-  }
-
-  await dbClient.end();
-  console.log("✅ setupDatabase complete");
+  console.log("✔ All required tables are ready inside database: postgres");
+  await db.end();
 }

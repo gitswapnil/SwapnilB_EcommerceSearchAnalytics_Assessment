@@ -8,32 +8,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function detectDelimiter(sample) {
-  // Check tab
   if (sample.includes("\t")) return "\t";
-  // Check comma
   if (sample.includes(",")) return ",";
-  // Check semicolon
   if (sample.includes(";")) return ";";
-  // Default
   return ",";
 }
 
-export function parseCSV() {
-  const filePath = path.join(__dirname, "raw_data", "nov 15 - nov 30.csv");
-  const content = fs.readFileSync(filePath, "utf8");
+export function readAllCSVFiles() {
+  const dirPath = path.join(__dirname, "raw_data");
 
-  // Detect delimiter using only the header line
-  const firstLine = content.split("\n")[0];
-  const delimiter = detectDelimiter(firstLine);
+  const files = fs.readdirSync(dirPath).filter(f => f.endsWith(".csv"));
+  if (files.length === 0) return [];
 
-  console.log(`📌 Detected CSV delimiter: "${delimiter.replace("\t","TAB")}"`);
+  let allRecords = [];
 
-  const records = parse(content, {
-    delimiter,
-    columns: header => header.map(h => h.trim()),
-    skip_empty_lines: true,
-    relax_column_count: true
-  });
+  for (const file of files) {
+    const fp = path.join(dirPath, file);
+    const content = fs.readFileSync(fp, "utf8");
+    const delimiter = detectDelimiter(content.split("\n")[0]);
 
-  return records;
+    console.log(`📥 Reading ${file} (delimiter: ${delimiter})`);
+
+    const rec = parse(content, {
+      delimiter,
+      columns: header => header.map(h => h.trim()),
+      skip_empty_lines: true,
+      relax_column_count: true,
+    });
+
+    allRecords.push(...rec);
+  }
+
+  return allRecords;
 }

@@ -1,30 +1,19 @@
 // index.js
-import { setupDatabase } from "./setupDatabase.js";
-import { parseCSV } from "./parseCSV.js";
-import { transformData, groupForBulkInsert } from "./transform.js";
-import { loadModularBulk } from "./load.js";
+import { setupDatabase } from "./setupDatabase.js"; // your existing setup that creates modular tables
+import { processAllFiles } from "./load_fast_copy.js";
 
-async function runETL() {
+async function run() {
   try {
-    console.log("🛠 Setup DB (if needed)...");
+    console.log("🛠 Ensure DB schema exists...");
     await setupDatabase();
 
-    console.log("📥 Extracting CSV...");
-    const raw = parseCSV();
-
-    console.log("🔄 Transforming CSV...");
-    const transformed = transformData(raw);
-
-    console.log("🧩 Grouping for bulk load...");
-    const groups = groupForBulkInsert(transformed);
-
-    console.log("📤 Loading to PostgreSQL (bulk)...");
-    await loadModularBulk(groups);
-
-    console.log("🎉 ETL finished");
+    console.log("📦 Starting COPY streaming ETL...");
+    await processAllFiles(); // will read raw_data/*.csv and stream COPY
+    console.log("🎉 All files processed.");
   } catch (err) {
-    console.error("ETL failed:", err);
+    console.error("❌ ETL failed:", err);
+    process.exitCode = 1;
   }
 }
 
-runETL();
+run();
